@@ -1,0 +1,67 @@
+@page "/timeline/{ConnectionId:int}"
+@inject ApiClient Api
+
+<PageTitle>Shared Timeline</PageTitle>
+
+@if (detail is null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <h3>Shared Timeline</h3>
+    <p class="text-muted">@detail.Mentor?.Name (mentor) &amp; @detail.Mentee?.Name (mentee)</p>
+
+    <ul class="list-group mb-3">
+        @foreach (var item in detail.Timeline)
+        {
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span class="@(item.IsDone ? "text-decoration-line-through text-muted" : "")">@item.Title</span>
+                <button class="btn btn-sm @(item.IsDone ? "btn-outline-secondary" : "btn-outline-success")"
+                        @onclick="() => Toggle(item.Id)">
+                    @(item.IsDone ? "Mark Undone" : "Mark Done")
+                </button>
+            </li>
+        }
+        @if (detail.Timeline.Count == 0)
+        {
+            <li class="list-group-item text-muted">No items yet.</li>
+        }
+    </ul>
+
+    <div class="d-flex gap-2" style="max-width: 500px;">
+        <input class="form-control" placeholder="Add a milestone..." @bind="newItemTitle" />
+        <button class="btn btn-primary" @onclick="AddItem">Add</button>
+    </div>
+}
+
+@code {
+    [Parameter] public int ConnectionId { get; set; }
+
+    private ConnectionDetail? detail;
+    private string newItemTitle = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        detail = await Api.GetConnectionDetailAsync(ConnectionId);
+    }
+
+    private async Task Toggle(int itemId)
+    {
+        await Api.ToggleTimelineItemAsync(itemId);
+        await Load();
+    }
+
+    private async Task AddItem()
+    {
+        if (string.IsNullOrWhiteSpace(newItemTitle)) return;
+        await Api.AddTimelineItemAsync(ConnectionId, newItemTitle);
+        newItemTitle = "";
+        await Load();
+    }
+}

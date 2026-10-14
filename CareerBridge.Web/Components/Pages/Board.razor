@@ -1,0 +1,119 @@
+@page "/board"
+@inject ApiClient Api
+@inject CurrentUserState UserState
+
+<PageTitle>Ask the Cohort</PageTitle>
+
+<h3>Ask the Cohort</h3>
+<p>Async Q&amp;A scoped to your transition path — value accumulates even when nobody's online at the same time.</p>
+
+@if (UserState.Current is null)
+{
+    <p><a href="profiles">Pick a profile</a> to ask or answer questions.</p>
+}
+else if (threads is null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Ask a Question</h5>
+            <div class="mb-2">
+                <input class="form-control" placeholder="Title" @bind="newTitle" />
+            </div>
+            <div class="mb-2">
+                <textarea class="form-control" placeholder="Details" @bind="newBody"></textarea>
+            </div>
+            <button class="btn btn-primary" @onclick="AskQuestion">Post Question</button>
+        </div>
+    </div>
+
+    @if (threads.Count == 0)
+    {
+        <p>No questions yet for this path — be the first to ask.</p>
+    }
+    else
+    {
+        @foreach (var t in threads)
+        {
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">@t.Question.Title</h5>
+                    <h6 class="card-subtitle mb-2 text-muted">asked by @t.AuthorName</h6>
+                    <p class="card-text">@t.Question.Body</p>
+
+                    <ul class="list-group mb-2">
+                        @foreach (var a in t.Answers)
+                        {
+                            <li class="list-group-item">
+                                <strong>@a.AuthorName:</strong> @a.Answer.Body
+                            </li>
+                        }
+                    </ul>
+
+                    <div class="d-flex gap-2">
+                        <input class="form-control" placeholder="Write an answer..." @bind="answerDrafts[t.Question.Id]" />
+                        <button class="btn btn-outline-primary" @onclick="() => Answer(t.Question.Id)">Answer</button>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+}
+
+@code {
+    private List<QuestionThread>? threads;
+    private string newTitle = "";
+    private string newBody = "";
+    private Dictionary<int, string> answerDrafts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        var user = UserState.Current;
+        if (user is null) return;
+        threads = await Api.GetQuestionsForPathAsync(user.TransitionPathId);
+        foreach (var t in threads)
+        {
+            answerDrafts.TryAdd(t.Question.Id, "");
+        }
+    }
+
+    private async Task AskQuestion()
+    {
+        var user = UserState.Current;
+        if (user is null || string.IsNullOrWhiteSpace(newTitle)) return;
+        await Api.AskQuestionAsync(new CreateQuestionRequest
+        {
+            TransitionPathId = user.TransitionPathId,
+            AuthorUserId = user.Id,
+            Title = newTitle,
+            Body = newBody
+        });
+        newTitle = "";
+        newBody = "";
+        await Load();
+    }
+
+    private async Task Answer(int questionId)
+    {
+        var user = UserState.Current;
+        if (user is null) return;
+        if (!answerDrafts.TryGetValue(questionId, out var body) || string.IsNullOrWhiteSpace(body)) return;
+
+        await Api.AnswerQuestionAsync(new CreateAnswerRequest
+        {
+            QuestionId = questionId,
+            AuthorUserId = user.Id,
+            Body = body
+        });
+        answerDrafts[questionId] = "";
+        await Load();
+    }
+}

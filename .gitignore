@@ -1,0 +1,24 @@
+## .NET build output
+bin/
+obj/
+
+## Visual Studio
+.vs/
+*.user
+*.suo
+
+## Rider / VS Code
+.idea/
+
+## SQLite local dev database
+*.db
+*.db-shm
+*.db-wal
+
+## Logs from local dev runs
+*.out.log
+*.err.log
+
+## OS
+Thumbs.db
+.DS_Store

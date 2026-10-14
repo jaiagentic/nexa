@@ -1,0 +1,127 @@
+@page "/playbooks"
+@inject ApiClient Api
+@inject CurrentUserState UserState
+
+<PageTitle>Playbooks</PageTitle>
+
+<h3>"Wish I Knew" Playbooks</h3>
+<p>Lessons from people who've completed the transition you're attempting.</p>
+
+@if (paths is null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="mb-3" style="max-width: 420px;">
+        <label class="form-label">Filter by transition path</label>
+        <select class="form-select" @onchange="OnFilterChanged">
+            <option value="0">All paths</option>
+            @foreach (var p in paths)
+            {
+                <option value="@p.Id">@p.FromRole &rarr; @p.ToRole</option>
+            }
+        </select>
+    </div>
+
+    @if (entries is null)
+    {
+        <p><em>Loading entries...</em></p>
+    }
+    else if (entries.Count == 0)
+    {
+        <p>No playbook entries yet for this path.</p>
+    }
+    else
+    {
+        @foreach (var e in entries)
+        {
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        @e.Author?.Name
+                        <small class="text-muted">
+                            &mdash; @e.TransitionPath?.FromRole &rarr; @e.TransitionPath?.ToRole,
+                            took @e.TimeTakenMonths months
+                        </small>
+                    </h5>
+                    <p><strong>Budget impact:</strong> @e.BudgetImpact</p>
+                    <p><strong>Hardest skill gap:</strong> @e.HardestSkillGap</p>
+                    <p><strong>Biggest mistake:</strong> @e.BiggestMistake</p>
+                    <p><strong>Advice:</strong> @e.AdviceText</p>
+                </div>
+            </div>
+        }
+    }
+
+    @if (UserState.Current is { IsMentor: true })
+    {
+        <hr class="my-4" />
+        <h4>Share Your Playbook</h4>
+        <EditForm Model="form" OnValidSubmit="Submit" FormName="playbook">
+            <div class="mb-3">
+                <label class="form-label">Budget impact</label>
+                <InputText class="form-control" @bind-Value="form.BudgetImpact" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Time taken (months)</label>
+                <InputNumber class="form-control" style="max-width: 160px;" @bind-Value="form.TimeTakenMonths" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Hardest skill gap</label>
+                <InputText class="form-control" @bind-Value="form.HardestSkillGap" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Biggest mistake</label>
+                <InputText class="form-control" @bind-Value="form.BiggestMistake" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Advice</label>
+                <InputTextArea class="form-control" @bind-Value="form.AdviceText" />
+            </div>
+            <button class="btn btn-primary" type="submit">Submit Playbook Entry</button>
+        </EditForm>
+        @if (submitted)
+        {
+            <p class="text-success mt-2">Thanks for sharing! Your entry is now visible above.</p>
+        }
+    }
+}
+
+@code {
+    private List<TransitionPath>? paths;
+    private List<PlaybookEntry>? entries;
+    private int? selectedPathId;
+    private CreatePlaybookRequest form = new();
+    private bool submitted;
+
+    protected override async Task OnInitializedAsync()
+    {
+        paths = await Api.GetTransitionPathsAsync();
+        await LoadEntries();
+
+        if (UserState.Current is { } u)
+        {
+            form.AuthorUserId = u.Id;
+            form.TransitionPathId = u.TransitionPathId;
+        }
+    }
+
+    private async Task LoadEntries()
+    {
+        entries = await Api.GetPlaybooksAsync(selectedPathId is > 0 ? selectedPathId : null);
+    }
+
+    private async Task OnFilterChanged(ChangeEventArgs e)
+    {
+        selectedPathId = int.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        await LoadEntries();
+    }
+
+    private async Task Submit()
+    {
+        await Api.CreatePlaybookAsync(form);
+        submitted = true;
+        await LoadEntries();
+    }
+}

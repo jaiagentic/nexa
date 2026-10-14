@@ -1,0 +1,98 @@
+@page "/opportunities"
+@inject ApiClient Api
+@inject CurrentUserState UserState
+
+<PageTitle>Opportunities</PageTitle>
+
+<h3>Warm Intro Opportunities</h3>
+<p>Openings mentors have personally flagged for people on their transition path — not cold job board postings.</p>
+
+@if (UserState.Current is null)
+{
+    <p><a href="profiles">Pick a profile</a> to see opportunities for your path.</p>
+}
+else if (opportunities is null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    @if (opportunities.Count == 0)
+    {
+        <p>No opportunities posted yet for this path.</p>
+    }
+    else
+    {
+        @foreach (var o in opportunities)
+        {
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">@o.Title <span class="text-muted">@o.Company</span></h5>
+                    <p class="card-text">@o.Description</p>
+                    @if (!string.IsNullOrWhiteSpace(o.Url))
+                    {
+                        <a href="@o.Url" target="_blank" rel="noopener">View Posting</a>
+                    }
+                </div>
+            </div>
+        }
+    }
+
+    @if (UserState.Current is { IsMentor: true })
+    {
+        <hr class="my-4" />
+        <h4>Flag an Opportunity</h4>
+        <EditForm Model="form" OnValidSubmit="Submit" FormName="opportunity">
+            <div class="mb-2">
+                <label class="form-label">Title</label>
+                <InputText class="form-control" @bind-Value="form.Title" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Company</label>
+                <InputText class="form-control" @bind-Value="form.Company" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Description</label>
+                <InputTextArea class="form-control" @bind-Value="form.Description" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label">URL</label>
+                <InputText class="form-control" @bind-Value="form.Url" />
+            </div>
+            <button class="btn btn-primary" type="submit">Post Opportunity</button>
+        </EditForm>
+    }
+}
+
+@code {
+    private List<Opportunity>? opportunities;
+    private CreateOpportunityRequest form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+        if (UserState.Current is { } u)
+        {
+            form.PostedByUserId = u.Id;
+            form.TransitionPathId = u.TransitionPathId;
+        }
+    }
+
+    private async Task Load()
+    {
+        var user = UserState.Current;
+        if (user is null) return;
+        opportunities = await Api.GetOpportunitiesAsync(user.TransitionPathId);
+    }
+
+    private async Task Submit()
+    {
+        await Api.CreateOpportunityAsync(form);
+        form = new CreateOpportunityRequest
+        {
+            PostedByUserId = UserState.Current!.Id,
+            TransitionPathId = UserState.Current!.TransitionPathId
+        };
+        await Load();
+    }
+}

@@ -1,0 +1,40 @@
+@inherits LayoutComponentBase
+@inject CurrentUserState UserState
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            @if (UserState.Current is { } u)
+            {
+                <span class="user-chip">
+                    <span class="user-chip-avatar">@u.Name[0]</span>
+                    <span>
+                        <strong>@u.Name</strong>
+                        <span class="text-muted">&middot; @(u.IsMentor ? "Mentor" : "Mentee")</span>
+                    </span>
+                    <a href="profiles" class="ms-2">Switch</a>
+                </span>
+            }
+            else
+            {
+                <a href="profiles">Pick a profile to get started &rarr;</a>
+            }
+        </div>
+
+        <article class="content px-4">
+            <div class="content-container">
+                @Body
+            </div>
+        </article>
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>

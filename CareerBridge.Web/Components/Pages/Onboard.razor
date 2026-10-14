@@ -1,0 +1,82 @@
+@page "/onboard"
+@inject ApiClient Api
+@inject CurrentUserState UserState
+@inject NavigationManager Nav
+
+<PageTitle>Create Profile</PageTitle>
+
+<h3>Create Your Profile</h3>
+
+@if (paths is null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <EditForm Model="form" OnValidSubmit="Submit" FormName="onboard">
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <InputText class="form-control" @bind-Value="form.Name" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Email</label>
+            <InputText class="form-control" @bind-Value="form.Email" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Transition Path</label>
+            <InputSelect class="form-select" @bind-Value="form.TransitionPathId">
+                @foreach (var p in paths)
+                {
+                    <option value="@p.Id">@p.FromRole &rarr; @p.ToRole</option>
+                }
+            </InputSelect>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Skills (comma separated)</label>
+            <InputText class="form-control" @bind-Value="form.Skills" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Bio</label>
+            <InputTextArea class="form-control" @bind-Value="form.Bio" />
+        </div>
+        <div class="mb-3 form-check">
+            <InputCheckbox class="form-check-input" @bind-Value="isMentor" />
+            <label class="form-check-label">
+                I've already completed this transition (mentor)
+            </label>
+        </div>
+        @if (isMentor)
+        {
+            <div class="mb-3">
+                <label class="form-label">When did you complete the transition?</label>
+                <InputDate class="form-control" @bind-Value="completedDate" />
+            </div>
+        }
+        <button class="btn btn-primary" type="submit">Create Profile</button>
+    </EditForm>
+}
+
+@code {
+    private List<TransitionPath>? paths;
+    private CreateUserRequest form = new();
+    private bool isMentor;
+    private DateTime completedDate = DateTime.Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        paths = await Api.GetTransitionPathsAsync();
+        if (paths.Count > 0) form.TransitionPathId = paths[0].Id;
+    }
+
+    private async Task Submit()
+    {
+        form.IsMentor = isMentor;
+        form.TransitionCompletedDate = isMentor ? completedDate : null;
+        var created = await Api.CreateUserAsync(form);
+        if (created is not null)
+        {
+            UserState.SetUser(created);
+            Nav.NavigateTo("/dashboard");
+        }
+    }
+}

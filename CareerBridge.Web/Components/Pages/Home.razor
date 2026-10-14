@@ -1,0 +1,50 @@
+@page "/"
+@inject CurrentUserState UserState
+
+<PageTitle>Nexa</PageTitle>
+
+<div class="hero text-center mb-5">
+    <h1>Nexa</h1>
+    <p class="lead mx-auto" style="max-width: 640px;">
+        Economic security isn't just financial — it's knowing someone who's done the pivot
+        you're attempting. Nexa connects people navigating a career transition with
+        peers a few steps ahead, with structured prompts and a shared playbook of lessons learned.
+    </p>
+
+    @if (UserState.Current is not null)
+    {
+        <p>Welcome back, <strong>@UserState.Current.Name</strong>.</p>
+        <a class="btn btn-light fw-semibold" href="dashboard">Go to My Dashboard</a>
+    }
+    else
+    {
+        <div class="d-flex justify-content-center gap-2 mt-3 flex-wrap">
+            <a class="btn btn-light fw-semibold" href="profiles">Try a Demo Profile</a>
+            <a class="btn btn-outline-light fw-semibold" href="onboard">Create Your Own</a>
+        </div>
+    }
+</div>
+
+<div class="row g-3">
+    <div class="col-md-4">
+        <div class="step-card">
+            <span class="step-number">1</span>
+            <h5>Match</h5>
+            <p class="text-muted mb-0">Get matched with mentors who made your exact transition recently — not distant veterans, people with fresh memory of the hard parts.</p>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="step-card">
+            <span class="step-number">2</span>
+            <h5>Ask</h5>
+            <p class="text-muted mb-0">Get stage-specific conversation prompts so you know exactly what to ask at each step of your transition.</p>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="step-card">
+            <span class="step-number">3</span>
+            <h5>Learn</h5>
+            <p class="text-muted mb-0">Browse "wish I knew" playbooks from people who've completed your transition — budget, timeline, and mistakes to avoid.</p>
+        </div>
+    </div>
+</div>

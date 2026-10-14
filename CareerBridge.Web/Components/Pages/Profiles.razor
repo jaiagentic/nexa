@@ -1,0 +1,90 @@
+@page "/profiles"
+@inject ApiClient Api
+@inject CurrentUserState UserState
+@inject NavigationManager Nav
+
+<PageTitle>Switch Profile</PageTitle>
+
+<h3>Demo Profiles</h3>
+<p>Pick a seeded profile to explore the app as that person (no auth in this demo build).</p>
+
+@if (users is null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="row">
+        @foreach (var u in users)
+        {
+            <div class="col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            @u.Name
+                            @if (u.IsMentor)
+                            {
+                                <span class="badge bg-success">Mentor</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Mentee</span>
+                            }
+                            @if (endorsementCounts.TryGetValue(u.Id, out var count) && count >= VerifiedThreshold)
+                            {
+                                <span class="badge bg-info">Verified</span>
+                            }
+                        </h5>
+                        <h6 class="card-subtitle mb-2 text-muted">
+                            @u.TransitionPath?.FromRole &rarr; @u.TransitionPath?.ToRole
+                        </h6>
+                        <p class="card-text">@u.Bio</p>
+                        <p class="card-text"><small class="text-muted">@(endorsementCounts.GetValueOrDefault(u.Id, 0)) vouch(es)</small></p>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-primary" @onclick="() => UseProfile(u)">
+                                Use this profile
+                            </button>
+                            @if (UserState.Current is not null && UserState.Current.Id != u.Id)
+                            {
+                                <button class="btn btn-sm btn-outline-info" @onclick="() => Vouch(u.Id)">
+                                    Vouch for them
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private const int VerifiedThreshold = 2;
+
+    private List<UserProfile>? users;
+    private Dictionary<int, int> endorsementCounts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        users = await Api.GetUsersAsync();
+        foreach (var u in users.Where(u => u.IsMentor))
+        {
+            var endorsements = await Api.GetEndorsementsForUserAsync(u.Id);
+            endorsementCounts[u.Id] = endorsements.Count;
+        }
+    }
+
+    private void UseProfile(UserProfile u)
+    {
+        UserState.SetUser(u);
+        Nav.NavigateTo("/dashboard");
+    }
+
+    private async Task Vouch(int endorsedUserId)
+    {
+        if (UserState.Current is null) return;
+        await Api.EndorseAsync(UserState.Current.Id, endorsedUserId, "Vouched for via Nexa");
+        var endorsements = await Api.GetEndorsementsForUserAsync(endorsedUserId);
+        endorsementCounts[endorsedUserId] = endorsements.Count;
+    }
+}

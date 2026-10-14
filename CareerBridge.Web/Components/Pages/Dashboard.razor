@@ -1,0 +1,352 @@
+@page "/dashboard"
+@inject ApiClient Api
+@inject CurrentUserState UserState
+@inject NavigationManager Nav
+
+<PageTitle>My Dashboard</PageTitle>
+
+@if (UserState.Current is null)
+{
+    <p>
+        You don't have an active profile yet.
+        <a href="profiles">Pick a demo profile</a> or <a href="onboard">create your own</a>.
+    </p>
+}
+else
+{
+    var user = UserState.Current;
+    <h3>Welcome, @user.Name</h3>
+    <p class="text-muted">
+        @user.TransitionPath?.FromRole &rarr; @user.TransitionPath?.ToRole
+        @if (user.IsMentor)
+        {
+            <span class="badge bg-success">Mentor</span>
+        }
+    </p>
+
+    @if (!user.IsMentor)
+    {
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Where are you in your transition?</h5>
+                <select class="form-select" style="max-width: 320px;" value="@user.CurrentStage"
+                        @onchange="OnStageChanged">
+                    @foreach (var s in Enum.GetValues<TransitionStage>())
+                    {
+                        <option value="@s">@s</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        @if (user.CurrentStage == TransitionStage.Offer)
+        {
+            <div class="alert alert-success d-flex justify-content-between align-items-center">
+                <span>Congrats on the offer! Ready to become the "few steps ahead" mentor for the next person behind you?</span>
+                <button class="btn btn-sm btn-success" @onclick="Graduate">Become a Mentor</button>
+            </div>
+        }
+
+        <h4>Conversation Prompts for "@user.CurrentStage"</h4>
+        @if (prompts is null)
+        {
+            <p><em>Loading prompts...</em></p>
+        }
+        else if (prompts.Count == 0)
+        {
+            <p>No prompts for this stage yet.</p>
+        }
+        else
+        {
+            <ul class="list-group mb-4">
+                @foreach (var p in prompts)
+                {
+                    <li class="list-group-item">@p</li>
+                }
+            </ul>
+        }
+
+        <h4>Mentors a Few Steps Ahead of You</h4>
+        <p class="text-muted"><small>Identities stay masked until you request an intro — browse their story first.</small></p>
+        @if (mentors is null)
+        {
+            <p><em>Finding mentors...</em></p>
+        }
+        else if (mentors.Count == 0)
+        {
+            <p>No mentors found yet for this transition path. Check back soon!</p>
+        }
+        else
+        {
+            <div class="row mb-4">
+                @foreach (var m in mentors)
+                {
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    @m.MentorName
+                                    @if (m.HasVerifiedBadge)
+                                    {
+                                        <span class="badge bg-info">Verified</span>
+                                    }
+                                </h5>
+                                <h6 class="card-subtitle mb-2 text-muted">
+                                    Completed transition @m.MonthsSinceTransition months ago
+                                </h6>
+                                <p class="card-text">@m.MentorBio</p>
+                                <p class="card-text"><small class="text-muted">Skills: @m.MentorSkills</small></p>
+
+                                @if (m.IsRevealed && m.ConnectionId is not null)
+                                {
+                                    <a class="btn btn-sm btn-outline-primary" href="@($"timeline/{m.ConnectionId}")">
+                                        View Shared Timeline
+                                    </a>
+                                }
+                                else if (m.ConnectionStatus == ConnectionStatus.Requested)
+                                {
+                                    <span class="text-muted"><em>Introduction requested — waiting on mentor</em></span>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-primary" @onclick="() => RequestIntro(m.MentorId)">
+                                        Request Intro
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        <h4>Mentors With Overlapping Skills (Any Path)</h4>
+        @if (skillMatches is null)
+        {
+            <p><em>Loading...</em></p>
+        }
+        else if (skillMatches.Count == 0)
+        {
+            <p>No skill-adjacent mentors found yet.</p>
+        }
+        else
+        {
+            <div class="row mb-4">
+                @foreach (var sm in skillMatches)
+                {
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">@sm.MentorName</h5>
+                                <h6 class="card-subtitle mb-2 text-muted">@sm.FromRole &rarr; @sm.ToRole</h6>
+                                <p class="card-text"><small class="text-muted">Shared skills: @string.Join(", ", sm.SharedSkills)</small></p>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        <h4>My Cohort</h4>
+        @if (cohort is null)
+        {
+            <p><em>Loading cohort...</em></p>
+        }
+        else
+        {
+            <p>You're in <strong>@cohort.CohortName</strong> with:</p>
+            <ul class="list-group mb-3">
+                @foreach (var member in cohort.Members.Where(mm => mm.Id != user.Id))
+                {
+                    <li class="list-group-item">@member.Name &mdash; @member.CurrentStage</li>
+                }
+                @if (cohort.Members.Count <= 1)
+                {
+                    <li class="list-group-item text-muted">Just you so far — more people will be grouped in as they join.</li>
+                }
+            </ul>
+
+            <h5>Cohort Runway Check-In</h5>
+            <p class="text-muted"><small>Financial runway, shared with your cohort so it's a normal data point, not a private worry.</small></p>
+            <div class="d-flex gap-2 align-items-end mb-3" style="max-width: 500px;">
+                <div>
+                    <label class="form-label">Months of runway remaining</label>
+                    <input type="number" class="form-control" @bind="runwayMonths" />
+                </div>
+                <div class="flex-grow-1">
+                    <label class="form-label">Notes</label>
+                    <input type="text" class="form-control" @bind="runwayNotes" />
+                </div>
+                <button class="btn btn-primary" @onclick="SubmitRunway">Check In</button>
+            </div>
+
+            @if (runwayViews is not null && runwayViews.Count > 0)
+            {
+                <ul class="list-group mb-4">
+                    @foreach (var r in runwayViews)
+                    {
+                        <li class="list-group-item">
+                            <strong>@r.UserName</strong>: @r.MonthsOfRunwayRemaining months remaining
+                            @if (!string.IsNullOrWhiteSpace(r.Notes))
+                            {
+                                <span class="text-muted">&mdash; @r.Notes</span>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        }
+    }
+    else
+    {
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Thanks for paying it forward</h5>
+                <p>
+                    You've completed this transition, which means you're exactly the kind of
+                    mentor mentees are matched with. Consider sharing a
+                    <a href="playbooks">"wish I knew" playbook entry</a>.
+                </p>
+            </div>
+        </div>
+
+        <h4>Pending Introduction Requests</h4>
+        @if (pendingIntros is null)
+        {
+            <p><em>Loading...</em></p>
+        }
+        else if (pendingIntros.Count == 0)
+        {
+            <p>No pending requests right now.</p>
+        }
+        else
+        {
+            <ul class="list-group mb-4">
+                @foreach (var p in pendingIntros)
+                {
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>@(p.Mentee?.Name ?? "Someone") wants an introduction</span>
+                        <button class="btn btn-sm btn-success" @onclick="() => AcceptIntro(p.Connection.Id)">Accept</button>
+                    </li>
+                }
+            </ul>
+        }
+
+        <h4>My Mentees</h4>
+        @if (acceptedMentees is null)
+        {
+            <p><em>Loading...</em></p>
+        }
+        else if (acceptedMentees.Count == 0)
+        {
+            <p>No accepted mentees yet.</p>
+        }
+        else
+        {
+            <ul class="list-group mb-4">
+                @foreach (var a in acceptedMentees)
+                {
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>@(a.Mentee?.Name ?? "Someone")</span>
+                        <a class="btn btn-sm btn-outline-primary" href="@($"timeline/{a.Connection.Id}")">View Shared Timeline</a>
+                    </li>
+                }
+            </ul>
+        }
+    }
+}
+
+@code {
+    private List<string>? prompts;
+    private List<MentorMatch>? mentors;
+    private List<SkillAdjacentMatch>? skillMatches;
+    private CohortView? cohort;
+    private List<RunwayCheckInView>? runwayViews;
+    private int runwayMonths;
+    private string runwayNotes = "";
+    private List<PendingIntro>? pendingIntros;
+    private List<PendingIntro>? acceptedMentees;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        var user = UserState.Current;
+        if (user is null) return;
+
+        if (!user.IsMentor)
+        {
+            prompts = await Api.GetPromptsForStageAsync(user.CurrentStage);
+            mentors = await Api.GetMatchesForMenteeAsync(user.Id);
+            skillMatches = await Api.GetSkillAdjacentMatchesAsync(user.Id);
+            cohort = await Api.GetCohortForUserAsync(user.Id);
+            if (cohort is not null)
+            {
+                runwayViews = await Api.GetCohortRunwayAsync(cohort.CohortId);
+            }
+        }
+        else
+        {
+            pendingIntros = await Api.GetPendingIntrosForMentorAsync(user.Id);
+            acceptedMentees = await Api.GetAcceptedMenteesForMentorAsync(user.Id);
+        }
+    }
+
+    private async Task OnStageChanged(ChangeEventArgs e)
+    {
+        var user = UserState.Current;
+        if (user is null) return;
+        if (Enum.TryParse<TransitionStage>(e.Value?.ToString(), out var stage))
+        {
+            user.CurrentStage = stage;
+            await Api.UpdateStageAsync(user.Id, stage);
+            prompts = await Api.GetPromptsForStageAsync(stage);
+        }
+    }
+
+    private async Task RequestIntro(int mentorId)
+    {
+        var user = UserState.Current;
+        if (user is null) return;
+        await Api.RequestIntroAsync(mentorId, user.Id);
+        mentors = await Api.GetMatchesForMenteeAsync(user.Id);
+    }
+
+    private async Task AcceptIntro(int connectionId)
+    {
+        await Api.AcceptConnectionAsync(connectionId);
+        var user = UserState.Current;
+        if (user is null) return;
+        pendingIntros = await Api.GetPendingIntrosForMentorAsync(user.Id);
+        acceptedMentees = await Api.GetAcceptedMenteesForMentorAsync(user.Id);
+    }
+
+    private async Task SubmitRunway()
+    {
+        var user = UserState.Current;
+        if (user is null || cohort is null) return;
+        await Api.SubmitRunwayCheckInAsync(new CreateRunwayCheckInRequest
+        {
+            UserId = user.Id,
+            MonthsOfRunwayRemaining = runwayMonths,
+            Notes = runwayNotes
+        });
+        runwayViews = await Api.GetCohortRunwayAsync(cohort.CohortId);
+    }
+
+    private async Task Graduate()
+    {
+        var user = UserState.Current;
+        if (user is null) return;
+        var updated = await Api.GraduateAsync(user.Id);
+        if (updated is not null)
+        {
+            updated.TransitionPath = user.TransitionPath;
+            UserState.SetUser(updated);
+            await LoadData();
+        }
+    }
+}
